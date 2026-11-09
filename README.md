@@ -160,8 +160,17 @@ Trên máy này port 8080 đã bị Apache chiếm, nên API chạy trong Docker
 cd C:\path\to\Upscaler
 docker compose --env-file .env -f deploy\docker-compose.yml --profile api up -d --build
 curl http://127.0.0.1:8081/healthz
-venv\Scripts\python -m server.run_worker      # encode worker trên host (AMF)
+venv\Scripts\python -m server.run_worker      # chạy thử encode worker trên host (AMF), Ctrl+C để dừng
 ```
+
+Cho worker tự chạy khi đăng nhập (PowerShell chạy bằng quyền Administrator, trong thư mục project):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\install-tasks.ps1 -Only worker
+Start-ScheduledTask Upscale-worker
+```
+
+Task tự chạy lại worker nếu nó thoát; log ở `logs\`. Docker Desktop cần bật "Start Docker Desktop when you sign in" để API và Redis cũng tự lên.
 
 `PUBLIC_BASE_URL=https://upscaler.qhuy204.id.vn` trong `.env`. Ingress cloudflared trỏ vào `http://127.0.0.1:8081`. Đổi port bằng biến `API_PORT` trong `.env`.
 

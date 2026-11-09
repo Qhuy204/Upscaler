@@ -1,10 +1,14 @@
-# Registers the API and the worker to start at logon (run once, in an elevated PowerShell).
-# Runs as the current user so NVENC and the venv are available.
+# Registers the API, the worker and the tunnel to start at logon (run once, in an elevated PowerShell).
+# Runs as the current user so the GPU encoder and the venv are available. Works from any project folder.
+#   .\deploy\install-tasks.ps1                  # main machine: api + worker + tunnel
+#   .\deploy\install-tasks.ps1 -Only worker     # AMD machine: API is in Docker, tunnel has its own task
+param([ValidateSet("api", "worker", "tunnel")][string[]]$Only = @("api", "worker", "tunnel"))
+$root = Split-Path $PSScriptRoot -Parent
 $user = "$env:USERDOMAIN\$env:USERNAME"
-New-Item -ItemType Directory -Force G:\upscale\logs | Out-Null
-foreach ($name in "api", "worker", "tunnel") {
-    $action = New-ScheduledTaskAction -Execute "powershell.exe" `
-        -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File G:\upscale\deploy\start-$name.ps1"
+New-Item -ItemType Directory -Force "$root\logs" | Out-Null
+foreach ($name in $Only) {
+    $action = New-ScheduledTaskAction -Execute "powershell.exe" -WorkingDirectory $root `
+        -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$root\deploy\start-$name.ps1`""
     $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
         -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) `
@@ -13,4 +17,4 @@ foreach ($name in "api", "worker", "tunnel") {
         -User $user -RunLevel Limited -Force | Out-Null
     "registered Upscale-$name"
 }
-"Start now:  Start-ScheduledTask Upscale-api; Start-ScheduledTask Upscale-worker; Start-ScheduledTask Upscale-tunnel"
+"Start now:  " + (($Only | ForEach-Object { "Start-ScheduledTask Upscale-$_" }) -join "; ")
