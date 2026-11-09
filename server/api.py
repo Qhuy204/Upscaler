@@ -267,7 +267,18 @@ def create_app(settings: Settings | None = None, r=None, arq=None, storage=None)
             size = await asyncio.to_thread(_copy_limited, upload.file, dest, limit)
             if size is None:
                 raise HTTPException(413, f"multipart upload is limited to {s.max_upload_mb} MB; use POST /v1/uploads")
-            job, _ = await enqueue(request, kid, "local", str(dest), options.model_dump(exclude_none=True),
+            kind, source = "local", str(dest)
+            if s.multipart_via_storage:
+                # API in a container: the host encode worker cannot read our disk, so hand over via storage
+                source = f"inputs/{kid}/{secrets.token_hex(12)}{ext}"
+                await retention.track(request.app.state.r, source, s.media_ttl)
+                try:
+                    await asyncio.to_thread(request.app.state.storage.upload_file, dest, source,
+                                            upload.content_type or "application/octet-stream")
+                finally:
+                    dest.unlink(missing_ok=True)
+                kind = "upload"
+            job, _ = await enqueue(request, kid, kind, source, options.model_dump(exclude_none=True),
                                    callback_url, idem, upload.filename, job_id)
             return view(request, job, 202)
         finally:

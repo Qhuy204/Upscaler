@@ -150,7 +150,20 @@ THREADS_PER_JOB=3
 WORKER_MAX_JOBS=12
 ```
 
-Ước tính khoảng 400–450 ads/giờ (con số này chưa đo). Máy chỉ nên chạy encode worker, còn Redis, Docker và dashboard để ở máy chính, vì riêng Docker Desktop (WSL2) đã cần 1–2 GB RAM.
+Ước tính khoảng 400–450 ads/giờ (con số này chưa đo). Nếu máy này chỉ là worker phụ của máy chính thì chỉ chạy encode worker, vì riêng Docker Desktop (WSL2) đã cần 1–2 GB RAM.
+
+#### Chạy độc lập (tunnel riêng `upscaler.qhuy204.id.vn`)
+
+Trên máy này port 8080 đã bị Apache chiếm, nên API chạy trong Docker và publish ra `127.0.0.1:8081` (service `api`, profile `api`). Encode worker vẫn chạy trên Windows host để dùng được AMF. Upload multipart được đưa qua R2 (`MULTIPART_VIA_STORAGE=true`, compose tự đặt), vì worker trên host không đọc được ổ đĩa của container, nên bắt buộc `STORAGE_BACKEND=r2`.
+
+```powershell
+cd C:\path\to\Upscaler
+docker compose --env-file .env -f deploy\docker-compose.yml --profile api up -d --build
+curl http://127.0.0.1:8081/healthz
+venv\Scripts\python -m server.run_worker      # encode worker trên host (AMF)
+```
+
+`PUBLIC_BASE_URL=https://upscaler.qhuy204.id.vn` trong `.env`. Ingress cloudflared trỏ vào `http://127.0.0.1:8081`. Đổi port bằng biến `API_PORT` trong `.env`.
 
 Cần driver AMD Adrenalin mới (có `amfrt64.dll`). Kiểm tra bằng `venv\Scripts\python scripts\upscale.py input\ad.mp4 --encoder amf`: log phải ghi encoder `amf` và không bị fallback sang `x264`. Sau đó chạy `scripts\bench.ps1` để chỉnh lại `FFMPEG_SLOTS`. Trong file `-cpu.csv` có cột GPU Video Encode: nếu cột này gần 100% thì giảm số slot, nếu CPU chưa đầy thì tăng.
 

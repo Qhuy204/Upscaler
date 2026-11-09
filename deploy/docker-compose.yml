@@ -42,5 +42,24 @@ services:
       REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379/0"
     depends_on: [redis, dashboard]
 
+  # API in Docker, for machines where the host port 8080 is taken (AMD box: Apache on 8080).
+  # Off by default (the main machine runs the API on the host); start it with the "api" profile:
+  #   docker compose --env-file .env -f deploy\docker-compose.yml --profile api up -d --build
+  # Published on 127.0.0.1:${API_PORT:-8081}; point cloudflared ingress at http://127.0.0.1:8081.
+  # Multipart uploads are handed to the host encode worker through R2 (needs STORAGE_BACKEND=r2).
+  api:
+    image: upscale-app
+    container_name: upscale-api
+    restart: unless-stopped
+    profiles: ["api"]
+    command: ["python", "-m", "server.run_api", "--host", "0.0.0.0", "--port", "8080"]
+    env_file: ../.env
+    environment:
+      REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379/0"
+      MULTIPART_VIA_STORAGE: "true"
+    ports:
+      - "127.0.0.1:${API_PORT:-8081}:8080"
+    depends_on: [redis, dashboard]
+
 volumes:
   redis-data:

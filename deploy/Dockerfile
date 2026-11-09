@@ -1,4 +1,5 @@
-# Image for the containerised services: dashboard and aux worker (webhooks + R2 cleanup).
+# Image for the containerised services: dashboard, aux worker (webhooks + R2 cleanup) and, with the
+# "api" compose profile, the API itself (machines where host port 8080 is taken).
 # Encode workers stay on the Windows host for NVENC; this image can also run `--role encode`
 # with the x264 encoder (ENCODER=x264) on a CPU-only Linux box.
 # Build context is the project root: docker compose -f deploy/docker-compose.yml build

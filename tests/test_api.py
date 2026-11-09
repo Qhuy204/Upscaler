@@ -105,6 +105,17 @@ async def test_multipart_job(ctx, sample_video, settings):
     assert (settings.work_dir / "uploads" / f"{job['id']}.mp4").stat().st_size == sample_video.stat().st_size
 
 
+async def test_multipart_via_storage(ctx, sample_video, settings, storage):
+    settings.multipart_via_storage = True  # API in Docker, worker on the host
+    with open(sample_video, "rb") as f:
+        r = await ctx["c"].post("/v1/jobs", files={"file": ("ad.mp4", f, "video/mp4")})
+    assert r.status_code == 202, r.text
+    job = await jobs.get(ctx["r"], r.json()["job_id"])
+    assert job["source_type"] == "upload" and job["source"].startswith("inputs/") and job["filename"] == "ad.mp4"
+    assert storage.size(job["source"]) == sample_video.stat().st_size
+    assert not any((settings.work_dir / "uploads").iterdir())
+
+
 async def test_presigned_upload_flow(ctx, sample_video):
     up = (await ctx["c"].post("/v1/uploads", json={"filename": "big.mp4", "content_type": "video/mp4"})).json()
     assert up["upload_key"].endswith(".mp4") and up["method"] == "PUT"

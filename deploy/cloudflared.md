@@ -47,6 +47,11 @@ ingress:
   - service: http_status:404
 ```
 
+**Máy AMD (i5-12400F + RX 6600):** tunnel riêng `upscaler` (id `e67cf44d-5bee-4b1f-b71a-50471e8dfe2c`), CNAME
+`upscaler.qhuy204.id.vn`, ingress `service: http://127.0.0.1:8081` (port 8080 bị Apache chiếm). API chạy trong Docker:
+`docker compose --env-file .env -f deploy\docker-compose.yml --profile api up -d --build`. Không chạy chung một tunnel
+trên hai máy: cloudflared coi đó là replica và chia request ngẫu nhiên giữa hai máy.
+
 Chạy thử: `cloudflared tunnel run upscale`, rồi `curl https://upscale.qhuy204.id.vn/healthz`.
 
 Cài thành Windows service (PowerShell **Run as Administrator**):

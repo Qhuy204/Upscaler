@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     signing_secret: str = "change-me"
 
     work_dir: Path = ROOT / "data" / "work"
+    # multipart uploads go to storage (inputs/...) instead of a local path; needed when the API runs
+    # in Docker and the encode worker on the host (docker compose service "api" sets it)
+    multipart_via_storage: bool = False
 
     # worker capacity
     ffmpeg_slots: int = 4          # concurrent ffmpeg processes (NVENC on a 3060 allows 8 sessions)
