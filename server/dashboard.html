@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Upscale Dashboard</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--fg:#1d2330;--mut:#6b7280;--line:#e5e7eb;--acc:#2563eb;
+--ok:#15803d;--bad:#b91c1c;--warn:#b45309;--run:#7c3aed}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1218;--card:#171b23;--fg:#e5e7eb;--mut:#9aa3b2;--line:#273041;
+--acc:#60a5fa;--ok:#4ade80;--bad:#f87171;--warn:#fbbf24;--run:#c4b5fd}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,Segoe UI,sans-serif}
+header{display:flex;gap:16px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--card);
+position:sticky;top:0;z-index:2;flex-wrap:wrap}
+h1{font-size:16px;margin:0}nav{display:flex;gap:4px;flex-wrap:wrap}
+nav button,.btn{border:1px solid var(--line);background:transparent;color:var(--fg);padding:5px 10px;border-radius:6px;cursor:pointer}
+nav button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+#upd{margin-left:auto;color:var(--mut);font-size:12px}
+main{padding:16px;max-width:1500px;margin:0 auto}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px}
+.card b{display:block;font-size:22px;font-variant-numeric:tabular-nums}.card span{color:var(--mut);font-size:12px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center}
+input,select{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+.tbl{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{color:var(--mut);font-weight:500;position:sticky;top:0;background:var(--card)}
+tr.click{cursor:pointer}tr.click:hover td{background:color-mix(in srgb,var(--acc) 8%,transparent)}
+td.wrap{white-space:normal;max-width:380px;word-break:break-all}
+.st{font-weight:600}.st-done{color:var(--ok)}.st-failed{color:var(--bad)}.st-canceled{color:var(--mut)}
+.st-queued{color:var(--warn)}.st-downloading,.st-processing,.st-uploading{color:var(--run)}
+.s2{color:var(--ok)}.s4{color:var(--warn)}.s5{color:var(--bad)}
+.prog{display:inline-block;width:60px;height:6px;background:var(--line);border-radius:3px;vertical-align:middle;margin-left:6px}
+.prog i{display:block;height:100%;background:var(--run);border-radius:3px}
+.mut{color:var(--mut)}
+dialog{border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--fg);width:min(900px,96vw);max-height:90vh;padding:0}
+dialog::backdrop{background:#0008}dialog .in{padding:16px;overflow:auto;max-height:90vh}
+pre{background:var(--bg);padding:10px;border-radius:6px;overflow:auto;font-size:12px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+</style>
+</head>
+<body>
+<header><h1>Upscale</h1>
+<nav id="tabs"></nav><span id="upd"></span></header>
+<main id="main"></main>
+<dialog id="dlg"><div class="in" id="dlgin"></div></dialog>
+<script>
+const TABS = {overview: "Tổng quan", jobs: "Jobs", events: "Trạng thái", requests: "Requests", workers: "Workers", keys: "API keys"};
+let tab = location.hash.slice(1) in TABS ? location.hash.slice(1) : "overview";
+const F = {jobs: {status: "", key_id: "", q: ""}, requests: {key_id: "", ip: "", path: "", errors: false}};
+const $ = (t, a = {}, ...kids) => { const e = document.createElement(t);
+  for (const [k, v] of Object.entries(a)) k === "class" ? e.className = v : k.startsWith("on") ? e[k] = v : e.setAttribute(k, v);
+  for (const c of kids.flat()) if (c != null) e.append(c instanceof Node ? c : String(c)); return e; };
+const ago = t => { if (!t) return ""; const s = Date.now() / 1000 - t;
+  return s < 60 ? Math.round(s) + "s" : s < 3600 ? Math.round(s / 60) + "m" : s < 86400 ? (s / 3600).toFixed(1) + "h" : (s / 86400).toFixed(1) + "d"; };
+const ts = t => t ? new Date(t * 1000).toLocaleString("vi-VN", {hour12: false}) : "";
+const dur = (a, b) => a && b ? (b - a).toFixed(1) + "s" : "";
+const mb = b => b ? (b / 1e6).toFixed(1) + " MB" : "";
+const st = s => $("span", {class: "st st-" + s}, s);
+async function get(u) { const r = await fetch(u, {cache: "no-store"}); if (!r.ok) throw new Error(r.status + " " + u); return r.json(); }
+function table(cols, rows, onclick) {
+  return $("div", {class: "tbl"}, $("table", {}, $("thead", {}, $("tr", {}, cols.map(c => $("th", {}, c[0])))),
+    $("tbody", {}, rows.length ? rows.map(r => $("tr", onclick ? {class: "click", onclick: () => onclick(r)} : {},
+      cols.map(c => { const v = c[1](r); return $("td", c[2] ? {class: c[2]} : {}, v ?? ""); })))
+      : $("tr", {}, $("td", {colspan: cols.length, class: "mut"}, "Không có dữ liệu")))));
+}
+function filters(name, fields) {
+  return $("div", {class: "bar"}, fields.map(([k, label, opts]) => {
+    let el;
+    if (opts === "bool") { el = $("input", {type: "checkbox"}); el.checked = F[name][k]; el.onchange = () => { F[name][k] = el.checked; render(); };
+      return $("label", {}, el, " " + label); }
+    if (opts) { el = $("select", {}, opts.map(o => $("option", {value: o[0]}, o[1]))); el.value = F[name][k]; el.onchange = () => { F[name][k] = el.value; render(); }; }
+    else { el = $("input", {placeholder: label, value: F[name][k]}); el.onchange = () => { F[name][k] = el.value.trim(); render(); }; }
+    return el; }));
+}
+const qs = o => new URLSearchParams(Object.entries(o).filter(([, v]) => v !== "" && v !== false)).toString();
+
+const VIEWS = {
+  async overview() {
+    const o = await get("api/overview"), l = o.last_24h, bs = l.by_status;
+    const c = (v, s) => $("div", {class: "card"}, $("b", {}, v ?? "–"), $("span", {}, s));
+    return [$("div", {class: "cards"},
+      c(Object.values(o.queues)[0], "Đang chờ (queue encode)"), c(o.workers.running + " / " + o.workers.slots, "Đang chạy / slot"),
+      c(o.workers.encode + " encode · " + o.workers.aux + " aux", "Worker online"),
+      c(l.total, "Job 24h"), c(bs.done || 0, "Done 24h"), c(bs.failed || 0, "Failed 24h"),
+      c(o.done_last_hour, "Done giờ qua"), c(l.avg_wait_s != null ? l.avg_wait_s + "s" : null, "Chờ trung bình"),
+      c(l.avg_timing_s.encode != null ? l.avg_timing_s.encode + "s" : null, "Encode trung bình"),
+      c(l.avg_timing_s.download != null ? l.avg_timing_s.download + "s / " + l.avg_timing_s.upload + "s" : null, "Tải xuống / tải lên TB"),
+      c(o.media_tracked, "File trên R2 (chờ xoá 24h)")),
+      $("h3", {}, "Job đang xử lý"), await jobsTable({status: "active", limit: 50}),
+      $("h3", {}, "Lỗi gần đây"), await jobsTable({status: "failed", limit: 10})];
+  },
+  async jobs() {
+    return [filters("jobs", [["status", "", [["", "Mọi trạng thái"], ["active", "Đang xử lý"], ["queued", "queued"], ["done", "done"], ["failed", "failed"], ["canceled", "canceled"]]],
+      ["key_id", "key_id"], ["q", "tìm id / tên file / URL"]]), await jobsTable({...F.jobs, limit: 200})];
+  },
+  async events() {
+    const d = await get("api/events?limit=300");
+    return table([["Lúc", e => ts(+e.t)], ["Job", e => e.job_id], ["Trạng thái", e => st(e.status)], ["Key", e => e.key_id],
+      ["Worker", e => e.worker], ["Lỗi", e => e.error, "wrap"]], d.events, e => showJob(e.job_id));
+  },
+  async requests() {
+    const d = await get("api/requests?limit=300&" + qs(F.requests));
+    return [filters("requests", [["key_id", "key_id"], ["ip", "IP"], ["path", "path chứa"], ["errors", "chỉ lỗi (≥400)", "bool"]]),
+      table([["Lúc", e => ts(+e.t)], ["IP", e => e.ip], ["Key", e => e.key_id], ["", e => e.method], ["Path", e => e.path, "wrap"],
+        ["HTTP", e => $("span", {class: "s" + String(e.status)[0]}, e.status)], ["ms", e => e.ms], ["Job", e => e.job_id || (e.jobs ? e.jobs + " jobs" : "")],
+        ["UA", e => e.ua, "wrap"]], d.requests, e => e.job_id && showJob(e.job_id))];
+  },
+  async workers() {
+    const d = await get("api/workers");
+    return table([["", w => $("span", {class: "dot", style: "background:" + (w.alive ? "var(--ok)" : "var(--bad)")})], ["Tên", w => w.name],
+      ["Role", w => w.role], ["Host", w => w.host], ["Queue", w => w.queue], ["Slots", w => w.slots], ["Đang chạy", w => w.running],
+      ["Done", w => w.done], ["Failed", w => w.failed], ["Encoder", w => w.encoder], ["Khởi động", w => w.started_at ? ago(+w.started_at) + " trước" : ""],
+      ["Heartbeat", w => ago(+w.seen) + " trước"]], d.workers);
+  },
+  async keys() {
+    const d = await get("api/keys");
+    return table([["Key", k => k.key_id], ["Tên", k => k.name], ["Tắt", k => k.disabled === "1" ? "✖" : ""],
+      ["Chưa xong", k => k.unfinished + " / " + k.max_queued], ["Đang chạy", k => k.running + " / " + k.max_running],
+      ["Rate/phút", k => k.rate_limit || "mặc định"], ["IP cho phép", k => k.allowed_ips || "mọi IP", "wrap"],
+      ["Tạo", k => k.created_at ? ts(+k.created_at) : ""]], d.keys, k => { F.jobs.key_id = k.key_id; go("jobs"); });
+  },
+};
+async function jobsTable(p) {
+  const d = await get("api/jobs?" + qs(p));
+  return table([["Tạo", j => ago(j.created_at) + " trước"], ["Job", j => j.id], ["Key", j => j.key_id],
+    ["Trạng thái", j => [st(j.status), ["downloading", "processing", "uploading"].includes(j.status) ?
+      $("span", {class: "prog"}, $("i", {style: "width:" + Math.round((j.progress || 0) * 100) + "%"})) : null]],
+    ["File", j => j.filename, "wrap"], ["Vào", j => j.in], ["Ra", j => j.out ? j.out + (j.fit ? " · " + j.fit : "") : ""],
+    ["Chờ", j => dur(j.created_at, j.started_at)], ["Xử lý", j => dur(j.started_at, j.finished_at)],
+    ["Encode", j => j.timing ? j.timing.encode + "s" : ""], ["Size", j => mb(j.bytes)], ["Lần", j => j.attempts],
+    ["Worker", j => j.worker], ["Lỗi", j => j.error, "wrap"]], d.jobs, j => showJob(j.id));
+}
+async function showJob(id) {
+  const d = await get("api/jobs/" + encodeURIComponent(id)), j = d.job;
+  const box = document.getElementById("dlgin");
+  box.replaceChildren($("div", {class: "bar"}, $("h3", {style: "margin:0"}, id), st(j.status), $("button", {class: "btn", style: "margin-left:auto", onclick: () => dlg.close()}, "Đóng")),
+    $("h4", {}, "Lịch sử trạng thái"),
+    table([["Lúc", e => ts(+e.t)], ["Trạng thái", e => st(e.status)], ["Worker", e => e.worker], ["Lỗi", e => e.error, "wrap"]], d.events),
+    $("h4", {}, "Requests liên quan"),
+    table([["Lúc", e => ts(+e.t)], ["IP", e => e.ip], ["", e => e.method], ["Path", e => e.path, "wrap"], ["HTTP", e => e.status], ["ms", e => e.ms]], d.requests),
+    $("h4", {}, "Chi tiết"), $("pre", {}, JSON.stringify(j, null, 2)));
+  const dlg = document.getElementById("dlg"); if (!dlg.open) dlg.showModal();
+}
+function go(t) { tab = t; location.hash = t; render(); }
+let busy = false;
+async function render() {
+  if (busy) return; busy = true;
+  document.getElementById("tabs").replaceChildren(...Object.entries(TABS).map(([k, v]) => $("button", {class: k === tab ? "on" : "", onclick: () => go(k)}, v)));
+  try {
+    const content = await VIEWS[tab]();
+    const keep = document.activeElement && document.activeElement.closest("main") ? null : undefined;
+    if (keep === undefined) document.getElementById("main").replaceChildren(...[content].flat());
+    document.getElementById("upd").textContent = "Cập nhật " + new Date().toLocaleTimeString("vi-VN", {hour12: false});
+  } catch (e) { document.getElementById("upd").textContent = "Lỗi: " + e.message; }
+  busy = false;
+}
+render(); setInterval(() => { if (!document.hidden && !document.getElementById("dlg").open) render(); }, 5000);
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# local environment / tooling
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.claude/
+
+# runtime data
+data/
+logs/
+input/
+output/
+
+# media
+*.mp4
+*.mov
+*.m4v
+*.webm
+*.mkv
+*.avi

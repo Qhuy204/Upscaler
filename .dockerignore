@@ -1,0 +1,15 @@
+venv
+data
+input
+output
+logs
+tests
+scripts
+.env
+.env.*
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.claude
+*.mp4
+*.mov

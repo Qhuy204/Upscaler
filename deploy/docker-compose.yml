@@ -1,0 +1,46 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: upscale-redis
+    restart: unless-stopped
+    # AOF: queued jobs survive a restart; noeviction: never drop queue/job keys silently
+    # REDIS_PASSWORD comes from G:\upscale\.env:
+    #   docker compose --env-file G:\upscale\.env -f G:\upscale\deploy\docker-compose.yml up -d
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec",
+              "--maxmemory", "1gb", "--maxmemory-policy", "noeviction",
+              "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}",
+              "--rename-command", "FLUSHALL", "", "--rename-command", "FLUSHDB", "",
+              "--rename-command", "CONFIG", "", "--rename-command", "DEBUG", ""]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+
+  # Admin dashboard: jobs + status history, API request log, workers, keys.
+  # http://127.0.0.1:8090 (user ADMIN_USER / ADMIN_PASSWORD from .env). Local only.
+  dashboard:
+    build: {context: .., dockerfile: deploy/Dockerfile}
+    image: upscale-app
+    container_name: upscale-dashboard
+    restart: unless-stopped
+    command: ["python", "-m", "server.run_dashboard", "--host", "0.0.0.0", "--port", "8090"]
+    env_file: ../.env
+    environment:
+      REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379/0"
+    ports:
+      - "127.0.0.1:8090:8090"
+    depends_on: [redis]
+
+  # Aux worker: webhook delivery + R2 24h cleanup, so the GPU host only encodes.
+  # Scale with: docker compose ... up -d --scale aux-worker=2
+  aux-worker:
+    image: upscale-app
+    restart: unless-stopped
+    command: ["python", "-m", "server.run_worker", "--role", "aux"]
+    env_file: ../.env
+    environment:
+      REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379/0"
+    depends_on: [redis, dashboard]
+
+volumes:
+  redis-data:

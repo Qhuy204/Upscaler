@@ -1,0 +1,10 @@
+# Tunnel "upscale": upscale.qhuy204.id.vn -> API on 127.0.0.1:8080
+# Run: C:\cloudflared\cloudflared.exe tunnel --config G:\upscale\deploy\cloudflared.yml run
+tunnel: 0c5a8f6c-f628-4219-ad5b-90d946023b90
+credentials-file: C:\Users\Qhuy\.cloudflared\0c5a8f6c-f628-4219-ad5b-90d946023b90.json
+ingress:
+  - hostname: upscale.qhuy204.id.vn
+    service: http://127.0.0.1:8080
+    originRequest:
+      connectTimeout: 30s
+  - service: http_status:404
