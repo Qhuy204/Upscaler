@@ -43,7 +43,8 @@ def test_gpu_encoder_args():
     assert a[a.index("-c:v") + 1] == "h264_amf" and a[a.index("-qp_i") + 1] == "26" and a[a.index("-qp_p") + 1] == "28"
     q = encoder_args("qsv", "master", 1920, 1080, crf=22)
     assert q[q.index("-c:v") + 1] == "h264_qsv" and q[q.index("-global_quality") + 1] == "22"
-    assert pix_fmt("qsv") == "nv12" and pix_fmt("nvenc") == pix_fmt("amf") == "yuv420p"
+    assert a[a.index("-profile") + 1] == "high" and a[a.index("-coder") + 1] == "cabac"
+    assert pix_fmt("qsv") == pix_fmt("amf") == "nv12" and pix_fmt("nvenc") == pix_fmt("x264") == "yuv420p"
 
 
 def test_resolve_encoder_order(monkeypatch):

@@ -213,7 +213,8 @@ def resolve_encoder(encoder="auto"):
 
 
 def pix_fmt(encoder):
-    return "nv12" if encoder == "qsv" else "yuv420p"  # QSV takes nv12 only
+    # QSV takes nv12 only; AMF converts anything else to nv12 itself, so hand it nv12 directly
+    return "nv12" if encoder in ("qsv", "amf") else "yuv420p"
 
 
 def encoder_args(encoder, quality, tw, th, crf=None):
@@ -227,8 +228,11 @@ def encoder_args(encoder, quality, tw, th, crf=None):
     if encoder == "x264":
         return ["-c:v", "libx264", "-preset", "medium", "-crf", str(x264_crf), *cap]
     if encoder == "amf":
-        # constant QP (predictable on every AMD generation); B/P frames 2 QP coarser than I
-        return ["-c:v", "h264_amf", "-usage", "transcoding", "-quality", "quality", "-rc", "cqp",
+        # Tuned on RDNA2 (RX 6600, VCN 3.0). Constant QP behaves the same on every AMD generation,
+        # unlike AMF's VBR modes; B/P frames 2 QP coarser than I. AMF's auto profile can pick Main,
+        # so ask for High + CABAC (~10% smaller at the same QP).
+        return ["-c:v", "h264_amf", "-usage", "transcoding", "-quality", "quality",
+                "-profile", "high", "-coder", "cabac", "-rc", "cqp",
                 "-qp_i", str(cq), "-qp_p", str(cq + 2), "-qp_b", str(cq + 2)]
     if encoder == "qsv":
         return ["-c:v", "h264_qsv", "-preset", "slower", "-global_quality", str(cq)]

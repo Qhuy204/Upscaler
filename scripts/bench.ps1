@@ -1,12 +1,16 @@
 ﻿param($Name, $InputFile, $Extra = "")
-# Runs upscale.py while logging GPU (nvidia-smi) and total CPU % once per second.
+# Runs upscale.py while logging total CPU % and GPU video-encode % once per second.
+# The encode counter comes from Windows (works for NVIDIA, AMD and Intel); nvidia-smi is logged too when present.
 $out = 'G:\upscale\output'; New-Item -ItemType Directory -Force $out | Out-Null
 $gpuLog = "$out\$Name-gpu.csv"; $cpuLog = "$out\$Name-cpu.csv"
-$smi = Start-Process nvidia-smi -ArgumentList '--query-gpu=timestamp,utilization.gpu,memory.used,temperature.gpu,power.draw','--format=csv','--loop=1' -RedirectStandardOutput $gpuLog -NoNewWindow -PassThru
-$cpu = Start-Process typeperf -ArgumentList '"\Processor(_Total)\% Processor Time"','-si','1' -RedirectStandardOutput $cpuLog -NoNewWindow -PassThru
+$smi = $null
+if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
+    $smi = Start-Process nvidia-smi -ArgumentList '--query-gpu=timestamp,utilization.gpu,memory.used,temperature.gpu,power.draw','--format=csv','--loop=1' -RedirectStandardOutput $gpuLog -NoNewWindow -PassThru
+}
+$cpu = Start-Process typeperf -ArgumentList '"\Processor(_Total)\% Processor Time"','"\GPU Engine(*engtype_VideoEncode)\Utilization Percentage"','-si','1' -RedirectStandardOutput $cpuLog -NoNewWindow -PassThru
 $extraArgs = @($Extra -split ' ' | Where-Object { $_ })
 $sw = [Diagnostics.Stopwatch]::StartNew()
 & G:\upscale\venv\Scripts\python.exe G:\upscale\scripts\upscale.py $InputFile @extraArgs -o "$out\$Name.mp4" *> "$out\$Name-run.log"
 $code = $LASTEXITCODE; $sw.Stop()
-Stop-Process $smi.Id, $cpu.Id -Force
+Stop-Process @($smi, $cpu | Where-Object { $_ } | ForEach-Object { $_.Id }) -Force
 "exit=$code seconds=$($sw.Elapsed.TotalSeconds)" | Out-File "$out\$Name-done.txt"

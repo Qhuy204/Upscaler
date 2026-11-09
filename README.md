@@ -139,6 +139,19 @@ Webhook được ký bằng HMAC-SHA256. Mô tả chi tiết request, response, 
 
 Đo trên i5-13400F + RTX 3060 (NVENC), 8 slot × 3 thread: khoảng **690 ads/giờ** với ad dài 30–50 s, nguồn 360p–720p. Khi chạy một mình, mỗi ad mất khoảng 5–7 s. Dùng `scripts/bench.ps1` để đo lại (ghi log GPU bằng `nvidia-smi` và CPU bằng `typeperf`).
 
+### Máy dùng AMD Radeon RX 6600
+
+Encoder `h264_amf` đã được chỉnh cho RX 6600 (RDNA2, VCN 3.0): constant QP, profile High + CABAC, đưa thẳng khung hình nv12 vào encoder. Trong `.env` của máy đó, đặt:
+
+```ini
+ENCODER=amf
+FFMPEG_SLOTS=6
+THREADS_PER_JOB=<số luồng CPU / 6>
+WORKER_MAX_JOBS=18
+```
+
+Cần driver AMD Adrenalin mới (có `amfrt64.dll`). Kiểm tra bằng `venv\Scripts\python scripts\upscale.py input\ad.mp4 --encoder amf`: log phải ghi encoder `amf` và không bị fallback sang `x264`. Sau đó chạy `scripts\bench.ps1` để chỉnh lại `FFMPEG_SLOTS`. Trong file `-cpu.csv` có cột GPU Video Encode: nếu cột này gần 100% thì giảm số slot, nếu CPU chưa đầy thì tăng.
+
 ## CLI (không cần server)
 
 ```powershell
