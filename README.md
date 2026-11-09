@@ -141,16 +141,16 @@ Webhook được ký bằng HMAC-SHA256. Mô tả chi tiết request, response, 
 
 ### Máy i5-12400F + AMD Radeon RX 6600
 
-Encoder `h264_amf` đã được chỉnh cho RX 6600 (RDNA2, VCN 3.0): constant QP, profile High + CABAC, đưa thẳng khung hình nv12 vào encoder. i5-12400F có 6 nhân / 12 luồng và không có iGPU (không dùng được QSV). Các bước khử nhiễu, phóng và làm nét chạy trên CPU, nên số slot × số thread được đặt bằng đúng 12 luồng của CPU. Trong `.env` của máy đó, đặt:
+Encoder `h264_amf` đã được chỉnh cho RX 6600 (RDNA2, VCN 3.0): constant QP, profile High + CABAC, đưa thẳng khung hình nv12 vào encoder. i5-12400F có 6 nhân / 12 luồng và không có iGPU (không dùng được QSV). Các bước khử nhiễu, phóng và làm nét chạy trên CPU, nên số slot × số thread được đặt bằng đúng 12 luồng của CPU. Máy này có 16 GB RAM nhưng thường chỉ trống khoảng 3 GB. Mỗi ffmpeg 1080p dùng tối đa khoảng 350 MB, nên chạy 4 slot (~1,4 GB) thay vì 6 slot (~2,2 GB, quá sát với RAM còn trống). Trong `.env` của máy đó, đặt:
 
 ```ini
 ENCODER=amf
-FFMPEG_SLOTS=6
-THREADS_PER_JOB=2
-WORKER_MAX_JOBS=18
+FFMPEG_SLOTS=4
+THREADS_PER_JOB=3
+WORKER_MAX_JOBS=12
 ```
 
-Ước tính khoảng 450–500 ads/giờ, vì CPU có ít luồng hơn i5-13400F (con số này chưa đo).
+Ước tính khoảng 400–450 ads/giờ (con số này chưa đo). Máy chỉ nên chạy encode worker, còn Redis, Docker và dashboard để ở máy chính, vì riêng Docker Desktop (WSL2) đã cần 1–2 GB RAM.
 
 Cần driver AMD Adrenalin mới (có `amfrt64.dll`). Kiểm tra bằng `venv\Scripts\python scripts\upscale.py input\ad.mp4 --encoder amf`: log phải ghi encoder `amf` và không bị fallback sang `x264`. Sau đó chạy `scripts\bench.ps1` để chỉnh lại `FFMPEG_SLOTS`. Trong file `-cpu.csv` có cột GPU Video Encode: nếu cột này gần 100% thì giảm số slot, nếu CPU chưa đầy thì tăng.
 
